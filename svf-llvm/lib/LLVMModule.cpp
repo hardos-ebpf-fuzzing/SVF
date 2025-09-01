@@ -197,12 +197,40 @@ void LLVMModuleSet::createSVFDataStructure()
         createSVFFunction(func);
     }
 
+    for (const Module& mod : modules)
+    {
+        for (const GlobalVariable& global : mod.globals())
+        {
+            if (LLVMModuleSet::getLLVMModuleSet()->hasGlobalRep(&global))
+            {
+                // This is the global rep, i.e., the one with the initializer
+                if (LLVMModuleSet::getLLVMModuleSet()->getGlobalRep(&global) ==
+                    &global)
+                {
+                    SVFGlobalValue* svfglobal = new SVFGlobalValue(
+                        global.getName().str(), getSVFType(global.getType()));
+                    svfModule->addGlobalSet(svfglobal);
+                    addGlobalValueMap(&global, svfglobal);
+                }
+            }
+        }
+    }
+
     /// then traverse candidate sets
     for (const Module& mod : modules)
     {
+
         /// GlobalVariable
-        for (const GlobalVariable& global :  mod.globals())
+        for (const GlobalVariable& global : mod.globals())
         {
+            if (LLVMModuleSet::getLLVMModuleSet()->hasGlobalRep(&global))
+            {
+                // Skip the ones processed before
+                if (LLVMModuleSet::getLLVMModuleSet()->getGlobalRep(&global) ==
+                    &global)
+                    continue;
+            }
+
             SVFGlobalValue* svfglobal = new SVFGlobalValue(
                 global.getName().str(), getSVFType(global.getType()));
             svfModule->addGlobalSet(svfglobal);
