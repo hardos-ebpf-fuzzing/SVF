@@ -166,7 +166,7 @@ void LLVMModuleSet::build()
 void LLVMModuleSet::createSVFDataStructure()
 {
     SVFType::svfI8Ty = getSVFType(getTypeInference()->int8Type());
-    SVFType::svfPtrTy = getSVFType(getTypeInference()->ptrType());
+    //SVFType::svfPtrTy = getSVFType(getTypeInference()->ptrType());
     // Functions need to be retrieved in the order of insertion
     // candidateDefs is the vector for all used defined functions
     // candidateDecls is the vector for all used declared functions
