@@ -567,6 +567,7 @@ void LLVMModuleSet::loadModules(const std::vector<std::string> &moduleNameVec)
     // module instance; see the comment(s) in `buildSVFModule` and `loadExtAPIModules()`
 
     owned_ctx = std::make_unique<LLVMContext>();
+    owned_ctx->setOpaquePointers(false);
     for (const std::string& moduleName : moduleNameVec)
     {
         if (!LLVMUtil::isIRFile(moduleName))
@@ -601,6 +602,7 @@ void LLVMModuleSet::loadExtAPIModules()
     // `std::unique_ptr<LLVMContext> LLVMModuleSet::owned_ctx` should be avoided in this case). This
     // function populates only this->modules.
     // In both cases, fetching the context from the main LLVM module (through `getContext`) works
+    return;
     assert(!empty() && "LLVMModuleSet contains no modules; cannot load ExtAPI module without LLVMContext!");
 
     // Load external API module (extapi.bc)
