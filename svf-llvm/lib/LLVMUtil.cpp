@@ -504,23 +504,37 @@ void LLVMUtil::removeFunAnnotations(Set<Function*>& removedFuncList)
     if (newAnnotations.size() == ca->getNumOperands())
         return; // No annotations to remove
 
-    ArrayType* annotationsType = ArrayType::get(ca->getType()->getElementType(), newAnnotations.size());
-    Constant* newCA = ConstantArray::get(annotationsType, newAnnotations);
+    // ---- Minimal fix: rewrite the initializer in place, do NOT change the global's type ----
+    auto *ArrTy = SVFUtil::dyn_cast<ArrayType>(ca->getType());
+    auto *EltTy = ArrTy->getElementType();                   // { i8*, i8*, i8*, i32, i8* }
+    Constant *ZeroElt = ConstantAggregateZero::get(EltTy);
 
-    glob->setName("llvm.global.annotations.old");
-    GlobalVariable *GV = new GlobalVariable(newCA->getType(), glob->isConstant(), glob->getLinkage(), newCA, "llvm.global.annotations");
-    GV->setSection(glob->getSection());
+    std::vector<Constant*> rewritten;
+    rewritten.reserve(ArrTy->getNumElements());
 
-#if (LLVM_VERSION_MAJOR < 17)
-    module->getGlobalList().push_back(GV);
-#elif (LLVM_VERSION_MAJOR >= 17)
-    module->insertGlobalVariable(GV);
-#else
-    assert(false && "llvm version not supported!");
-#endif
+    // Re-scan the original array: keep entries we still want; zero-out the removed ones.
+    for (unsigned i = 0, e = ArrTy->getNumElements(); i != e; ++i) {
+        Constant *Op = ca->getOperand(i);
+        auto *CS = SVFUtil::dyn_cast<ConstantStruct>(Op);
 
-    glob->replaceAllUsesWith(GV);
-    glob->eraseFromParent();
+        Function *Annotated = nullptr;
+        if (CS) {
+            if (auto *CE = SVFUtil::dyn_cast<ConstantExpr>(CS->getOperand(0))) {
+                if (CE->getOpcode() == Instruction::BitCast)
+                    Annotated = SVFUtil::dyn_cast<Function>(CE->getOperand(0));
+            }
+            if (!Annotated)
+                Annotated = SVFUtil::dyn_cast<Function>(CS->getOperand(0));
+        }
+
+        if (Annotated && removedFuncList.count(Annotated))
+            rewritten.push_back(ZeroElt);                    // wipe this slot, keep array size/type
+        else
+            rewritten.push_back(CS ? static_cast<Constant*>(CS) : ZeroElt);
+    }
+
+    // Type is identical to the old one: [N x { i8*, i8*, i8*, i32, i8* }]
+    glob->setInitializer(ConstantArray::get(ArrTy, rewritten));
 }
 
 /// Get all called funcions in a parent function
