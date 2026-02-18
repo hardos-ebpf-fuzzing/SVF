@@ -39,6 +39,7 @@
 #include "MSSA/SVFGBuilder.h"
 #include "llvm/Support/FileSystem.h"
 #include "SVF-LLVM/ObjTypeInference.h"
+#include "SVF-LLVM/KGDebug.h"
 
 using namespace std;
 using namespace SVF;
@@ -134,6 +135,8 @@ SVFModule* LLVMModuleSet::buildSVFModule(const std::vector<std::string> &moduleN
 
 void LLVMModuleSet::buildSymbolTable() const
 {
+    SVFUtil::errs() << "[DEBUG] buildSymbolTable starting...\n";
+    KGDebug::phase = "buildSymbolTable";
     double startSymInfoTime = SVFStat::getClk(true);
     if (!SVFModule::pagReadFromTXT())
     {
@@ -145,6 +148,7 @@ void LLVMModuleSet::buildSymbolTable() const
     double endSymInfoTime = SVFStat::getClk(true);
     SVFStat::timeOfBuildingSymbolTable =
         (endSymInfoTime - startSymInfoTime) / TIMEINTERVAL;
+    SVFUtil::errs() << "[DEBUG] buildSymbolTable done.\n";
 }
 
 void LLVMModuleSet::build()
@@ -152,15 +156,30 @@ void LLVMModuleSet::build()
     if(preProcessed==false)
         prePassSchedule();
 
+    SVFUtil::errs() << "[DEBUG] LLVMModuleSet::build - buildFunToFunMap...\n";
+    KGDebug::phase = "LLVMModuleSet::buildFunToFunMap";
     buildFunToFunMap();
+    SVFUtil::errs() << "[DEBUG] LLVMModuleSet::build - buildGlobalDefToRepMap...\n";
+    KGDebug::phase = "LLVMModuleSet::buildGlobalDefToRepMap";
     buildGlobalDefToRepMap();
+    SVFUtil::errs() << "[DEBUG] LLVMModuleSet::build - removeUnusedExtAPIs...\n";
+    KGDebug::phase = "LLVMModuleSet::removeUnusedExtAPIs";
     removeUnusedExtAPIs();
 
     if (Options::SVFMain())
+    {
+        SVFUtil::errs() << "[DEBUG] LLVMModuleSet::build - addSVFMain...\n";
+        KGDebug::phase = "LLVMModuleSet::addSVFMain";
         addSVFMain();
+    }
 
+    SVFUtil::errs() << "[DEBUG] LLVMModuleSet::build - createSVFDataStructure...\n";
+    KGDebug::phase = "LLVMModuleSet::createSVFDataStructure";
     createSVFDataStructure();
+    SVFUtil::errs() << "[DEBUG] LLVMModuleSet::build - initSVFFunction...\n";
+    KGDebug::phase = "LLVMModuleSet::initSVFFunction";
     initSVFFunction();
+    SVFUtil::errs() << "[DEBUG] LLVMModuleSet::build - done.\n";
 }
 
 void LLVMModuleSet::createSVFDataStructure()
@@ -321,11 +340,16 @@ void LLVMModuleSet::createSVFFunction(const Function* func)
 
 void LLVMModuleSet::initSVFFunction()
 {
+    unsigned modIdx = 0;
     for (Module& mod : modules)
     {
+        KGDebug::moduleName = mod.getModuleIdentifier();
+        SVFUtil::errs() << "[DEBUG] initSVFFunction: module [" << modIdx++ << "/" << modules.size()
+                        << "] " << mod.getModuleIdentifier() << "\n";
         /// Function
         for (const Function& f : mod.functions())
         {
+            KGDebug::funcName = f.getName().str();
             SVFFunction* svffun = getSVFFunction(&f);
             initSVFBasicBlock(&f);
 
@@ -335,6 +359,8 @@ void LLVMModuleSet::initSVFFunction()
             }
         }
     }
+    KGDebug::funcName.clear();
+    KGDebug::moduleName.clear();
 }
 
 void LLVMModuleSet::initSVFBasicBlock(const Function* func)
@@ -367,6 +393,14 @@ void LLVMModuleSet::initSVFBasicBlock(const Function* func)
         for (BasicBlock::const_iterator iit = bb->begin(), eiit = bb->end(); iit != eiit; ++iit)
         {
             const Instruction* inst = &*iit;
+            // DEBUG: update breadcrumb so crash handler knows what we were processing
+            {
+                std::string tmp;
+                llvm::raw_string_ostream rso(tmp);
+                inst->print(rso);
+                KGDebug::instDesc = rso.str().substr(0, 200); // truncate for safety
+            }
+            KGDebug::instCounter++;
             if(const CallBase* call = SVFUtil::dyn_cast<CallBase>(inst))
             {
                 SVFInstruction* svfinst = getSVFInstruction(call);
@@ -763,7 +797,7 @@ void LLVMModuleSet::addSVFMain()
         assert(mainMod && "Module with main function not found.");
         Module& M = *mainMod;
         // char **
-        Type* ptr = PointerType::getUnqual(M.getContext());
+        Type* ptr = KGDebug::safeGetUnqualPtrType(M.getContext(), "addSVFMain");
         Type* i32 = IntegerType::getInt32Ty(M.getContext());
         // define void @svf.main(i32, i8**, i8**)
 #if (LLVM_VERSION_MAJOR >= 9)

@@ -31,6 +31,7 @@
 #include "SVF-LLVM/BasicTypes.h"
 #include "SVF-LLVM/CHGBuilder.h"
 #include "SVF-LLVM/CppUtil.h"
+#include "SVF-LLVM/KGDebug.h"
 #include "SVF-LLVM/LLVMLoopAnalysis.h"
 #include "SVF-LLVM/LLVMUtil.h"
 #include "SVF-LLVM/SymbolTableBuilder.h"
@@ -83,18 +84,32 @@ SVFIR* SVFIRBuilder::build()
 
     /// initial external library information
     /// initial SVFIR nodes
+    SVFUtil::errs() << "[DEBUG] SVFIRBuilder::build - initialiseNodes...\n";
+    KGDebug::phase = "SVFIRBuilder::initialiseNodes";
     initialiseNodes();
     /// initial SVFIR edges:
     ///// handle globals
+    SVFUtil::errs() << "[DEBUG] SVFIRBuilder::build - visitGlobal...\n";
+    KGDebug::phase = "SVFIRBuilder::visitGlobal";
     visitGlobal(svfModule);
     ///// collect exception vals in the program
 
     /// handle functions
+    SVFUtil::errs() << "[DEBUG] SVFIRBuilder::build - visiting instructions...\n";
+    KGDebug::phase = "SVFIRBuilder::visitInstructions";
+    unsigned modIdx = 0;
+    unsigned totalMods = 0;
+    for (Module& M_ : LLVMModuleSet::getLLVMModuleSet()->getLLVMModules())
+    { (void)M_; totalMods++; }
     for (Module& M : LLVMModuleSet::getLLVMModuleSet()->getLLVMModules())
     {
+        KGDebug::moduleName = M.getModuleIdentifier();
+        SVFUtil::errs() << "[DEBUG] SVFIRBuilder::build - module [" << modIdx++ << "/" << totalMods
+                        << "] " << M.getModuleIdentifier() << "\n";
         for (Module::const_iterator F = M.begin(), E = M.end(); F != E; ++F)
         {
             const Function& fun = *F;
+            KGDebug::funcName = fun.getName().str();
             const SVFFunction* svffun = LLVMModuleSet::getLLVMModuleSet()->getSVFFunction(&fun);
             /// collect return node of function fun
             if(!fun.isDeclaration())
@@ -132,12 +147,31 @@ SVFIR* SVFIRBuilder::build()
                         it != eit; ++it)
                 {
                     const Instruction& inst = *it;
+                    // DEBUG: update breadcrumb for crash handler
+                    {
+                        std::string tmp;
+                        llvm::raw_string_ostream rso(tmp);
+                        inst.print(rso);
+                        KGDebug::instDesc = rso.str().substr(0, 200);
+                    }
+                    KGDebug::instCounter++;
+                    // Print progress every 500k instructions
+                    if (KGDebug::instCounter % 500000 == 0) {
+                        SVFUtil::errs() << "[DEBUG] visitInstructions: "
+                                        << KGDebug::instCounter << " instructions processed"
+                                        << " (module=" << KGDebug::moduleName
+                                        << ", func=" << KGDebug::funcName << ")\n";
+                    }
                     setCurrentLocation(&inst,&bb);
                     visit(const_cast<Instruction&>(inst));
                 }
             }
         }
     }
+    KGDebug::funcName.clear();
+    KGDebug::instDesc.clear();
+    SVFUtil::errs() << "[DEBUG] visitInstructions complete: "
+                    << KGDebug::instCounter << " total instructions visited.\n";
 
     sanityCheck();
 
@@ -1181,7 +1215,7 @@ NodeID SVFIRBuilder::getGepValVar(const Value* val, const AccessPath& ap, const 
         LLVMModuleSet* llvmmodule = LLVMModuleSet::getLLVMModuleSet();
         NodeID gepNode = pag->addGepValNode(curVal, llvmmodule->getSVFValue(val), ap,
                                             NodeIDAllocator::get()->allocateValueId(),
-                                            llvmmodule->getSVFType(PointerType::getUnqual(llvmmodule->getContext())));
+                                            llvmmodule->getSVFType(KGDebug::safeGetUnqualPtrType(llvmmodule->getContext(), "getGepValVar")));
         addGepEdge(base, gepNode, ap, true);
         setCurrentLocation(cval, cbb);
         return gepNode;

@@ -9,6 +9,7 @@
 #include "llvm/IR/User.h"
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
+#include "SVF-LLVM/KGDebug.h"
 
 namespace llvm
 {
@@ -63,7 +64,8 @@ public:
     Type* operator*() const
     {
         if ( CurTy.getInt() )
-            return CurTy.getPointer()->getPointerTo(AddrSpace);
+            return KGDebug::safeGetPointerTo(CurTy.getPointer(), AddrSpace,
+                                              "GEPTypeBridgeIterator::operator*");
         return CurTy.getPointer();
     }
 

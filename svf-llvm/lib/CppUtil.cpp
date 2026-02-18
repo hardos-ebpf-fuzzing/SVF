@@ -34,6 +34,7 @@
 #include "Util/SVFUtil.h"
 #include "SVF-LLVM/LLVMModule.h"
 #include "SVF-LLVM/ObjTypeInference.h"
+#include "SVF-LLVM/KGDebug.h"
 
 #include <cxxabi.h> // for demangling
 
@@ -591,7 +592,10 @@ s32_t cppUtil::getVCallIdx(const CallBase* cs)
     s32_t idx_value;
     if (idx == nullptr)
     {
-        SVFUtil::errs() << "vcall gep idx not constantint\n";
+        SVFUtil::errs() << "vcall gep idx not constantint"
+                        << " (module=" << KGDebug::moduleName
+                        << ", func=" << KGDebug::funcName
+                        << ", inst=" << KGDebug::instDesc << ")\n";
         idx_value = 0;
     }
     else

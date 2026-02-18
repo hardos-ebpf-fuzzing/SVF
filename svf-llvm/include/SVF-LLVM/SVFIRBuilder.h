@@ -33,6 +33,7 @@
 #include "SVFIR/SVFIR.h"
 #include "SVF-LLVM/BasicTypes.h"
 #include "SVF-LLVM/ICFGBuilder.h"
+#include "SVF-LLVM/KGDebug.h"
 #include "SVF-LLVM/LLVMModule.h"
 #include "SVF-LLVM/LLVMUtil.h"
 
@@ -271,7 +272,8 @@ protected:
     inline NodeID addNullPtrNode()
     {
         LLVMContext& cxt = LLVMModuleSet::getLLVMModuleSet()->getContext();
-        ConstantPointerNull* constNull = ConstantPointerNull::get(PointerType::getUnqual(cxt));
+        ConstantPointerNull* constNull = ConstantPointerNull::get(
+            KGDebug::safeGetUnqualPtrType(cxt, "addNullPtrNode"));
         NodeID nullPtr = pag->addValNode(LLVMModuleSet::getLLVMModuleSet()->getSVFValue(constNull),pag->getNullPtr());
         setCurrentLocation(constNull, nullptr);
         addBlackHoleAddrEdge(pag->getBlkPtr());

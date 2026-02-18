@@ -32,6 +32,7 @@
 
 #include "Util/SVFUtil.h"
 #include "SVF-LLVM/BasicTypes.h"
+#include "SVF-LLVM/KGDebug.h"
 #include "SVFIR/SVFValue.h"
 #include "Util/ThreadAPI.h"
 
@@ -81,13 +82,7 @@ public:
     /// pointer type
     inline const Type *ptrType()
     {
-        // return PointerType::getUnqual(getLLVMCtx());
-        LLVMContext &C = getLLVMCtx();
-        Type *I8 = Type::getInt8Ty(C);
-
-        // Pick the right address space. 0 is usually fine; or read from a Module’s DataLayout.
-        unsigned AS = 0;
-        return llvm::PointerType::get(I8, AS); 
+        return KGDebug::safeGetUnqualPtrType(getLLVMCtx(), "ObjTypeInference::ptrType");
     }
 
     /// int8 type
